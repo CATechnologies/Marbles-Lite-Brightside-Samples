@@ -42,7 +42,7 @@
 //              XMACLIB1='SYS1.MACLIB',     External macro library
 //              XMACLIB2='SYS1.MACLIB',     External macro library
 //              CEEMAC='CEE.SCEEMAC',       z/OS cee macs
-//              CAMAC1='CAI.S910.MACLIB',   CA COMM SERVICES?
+//              CAMAC1='CAI.S910.MACLIB',   COMM SERVICES?
 //              SDSNLOAD='ISLDB2.DB2C10.GA.RSU1703.SDSNLOAD',   DB2
 //              SDSNMACS='ISLDB2.DB2C10.GA.RSU1703.SDSNMACS',   DB2
 //              SDSNEXIT='ISLDB2.DB2C10.GA.RSU1703.SDSNLOAD',   DB2
