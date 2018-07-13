@@ -1,0 +1,205 @@
+//********************************************************************
+//* The symbolics in this processor contain naming conventions that  *
+//* may not be conducive to your site.  Modify as needed.            *
+//*                                                                  *
+//* The processor also uses SITE SYMBOLICS to manage naming          *
+//* conventions.  Adjust them accordingly.                           *
+//********************************************************************
+//*====================================================================
+//* Changes:
+//*        R14 Sep 2009 - R14 use CONPARMX for $$$$DLFT options
+//*        R14 Sep 2009 - R14 put SIZE= on PARMS from $$$$DFLT
+//*                           use IEWLCCS from $$$$DFLT options
+//*        R14 Sep 2009 - R14 remove SIZE= option
+//*        R14 Sep 2009 - R14 capture binder SYSLOUT
+//*        R14 Oct 2009 - R14 SDF= option
+//*        R14 Dec 2009 - R14 COMPAT= option
+//*        R14 Feb 2010 - remove DD MFPR.MOTM.EA.P1.LOADLIB
+//*        R14 Feb 2011 - Add AMODE(64) C Module BIND variability
+//*   MJ - Sept 5, 2012 - Add CPP variable for optional allocations
+//*             PFX='&PHL..&#BASEPRFX.',    Endevor dsname prefix
+//*====================================================================
+//GLNK     PROC PARMA=,                     CONPARMS first parms
+//              PARMZ=,                     CONPARMS last  parms
+//              RELINK=YES,                 RELINK all Impacted LOADS
+//              PHL=,                       Set product dsname HLQ
+//              PFX='&#HLQ..&C1SY..&C1SU..&C1EN(1,3)&C1S#.',
+//              SDF='NO',                   DLL SideDeck File
+//              COMPAT='',                  binder COMPAT option
+//              B64='NO',                   bind AMODE(64) Code option
+//              CPP='NO',                   Bind with C++ Libs
+//              COBTYP='NONE',              Specify COBLE or COBII
+//              CLELKED='CEE.SCEELKED',     COBOL\LE CALL library
+//              CIILIB='IBMPROD.V1R4M0.COB2LIB',  COBOL II CALL lib
+//              SEQLIST='N',                Create sequential listing
+//              VIO='SYSDA',                UNIT= for utility data sets
+//              XOBJLIB1='NULLFILE',        External object library
+//              XOBJLIB2='NULLFILE'         External object library
+//*
+//IFRELINK IF (&RELINK EQ 'YES') THEN
+//*
+//*====================================================================
+//*        Allocate the output listing data set
+//*====================================================================
+//INITLIST EXEC PGM=BC1PDSIN,MAXRC=0
+//C1INIT01 DD   DSN=&&LNKLST,DISP=(,PASS),
+//              SPACE=(CYL,(2,1)),
+//              DCB=(RECFM=FBA,LRECL=121,BLKSIZE=1210,DSORG=PS)
+//B1INIT02 DD   DSN=&&SYSLOUT,DISP=(,PASS),
+//              SPACE=(CYL,(2,1)),
+//              DCB=(RECFM=FBA,LRECL=121,BLKSIZE=1210,DSORG=PS)
+//B1INIT03 DD   DSN=&&LNKLOD,DISP=(,PASS),
+//              SPACE=(CYL,(2,1)),
+//              DCB=(RECFM=U,LRECL=0,BLKSIZE=32760,DSORG=PO),
+//              DSNTYPE=LIBRARY
+//*====================================================================
+//*        Invoke Binder
+//*====================================================================
+//*--------------------------------------------------------------------
+//*        Fetch LINK DECK from concat for System  (Required)
+//*--------------------------------------------------------------------
+//SYSLIN   EXEC PGM=IEBUPDTE,MAXRC=0
+//SYSPRINT DD   DUMMY
+//SYSIN    DD   *
+./  REPRO NEW=PS,NAME=&C1ELEMENT
+//SYSUT1   DD   DISP=SHR,DSN=&PFX..&C1ELTYPE,
+//              MONITOR=COMPONENTS,ALLOC=PMAP
+//SYSUT2   DD   DSN=&&SYSLIN,DISP=(,PASS),
+//              SPACE=(TRK,(10,10)),
+//              DCB=(RECFM=FB,LRECL=80,BLKSIZE=27920)
+//*====================================================================
+//*        Build Binder options file
+//*====================================================================
+//GENOPTS  EXEC PGM=CONPARMX,COND=(0,NE,INITLIST),MAXRC=4,
+//             PARM=(IEWLCCS,'(&PARMA)',$$$$DFLT,&C1PRGRP,
+//                   &C1ELEMENT,'(&PARMZ)','Y','Y')
+//*
+//PARMSDEF DD DISP=SHR,DSN=&PFX..PARMS,
+//         MONITOR=COMPONENTS,ALLOC=PMAP
+//PARMS    DD DSN=&&GENOPTS,
+//            UNIT=SYSDA,SPACE=(TRK,(5,5)),
+//            DSORG=PS,RECFM=FB,LRECL=80,BLKSIZE=0,
+//            DISP=(,PASS)
+//*====================================================================
+//*        LINK all impacted loads
+//*====================================================================
+//RELINK   EXEC PGM=IEWL,MAXRC=4,
+//              PARM='&COMPAT.OPTIONS=GENOPTS'
+//GENOPTS  DD DSN=&&GENOPTS,DISP=(OLD,DELETE)
+//*--------------------------------------------------------------------
+//*        Expand libraries needed by Binder.
+//*!!!!!!! SYSLIB DD is last; can add to concatenation list inline !!!!
+//*--------------------------------------------------------------------
+//*-INC GLNKLIBS
+//*------------------------------------------------------------------*
+//*   Changes:
+//*------------------------------------------------------------------*
+//SYSLIN   DD   DSN=&&SYSLIN,DISP=(OLD,DELETE)
+//*
+//LUSS    IF  ('&C1PRGRP(1,4)' EQ 'LUSS') THEN
+//LUSSBN  IF ('&C1PRGRP(5,2)' EQ 'LB') THEN
+//SYSLMOD DD PATH='/u/users/&C1SY./&C1SU./&C1EN(1,1)&C1S#./lib'
+//LUSSBN  ELSE
+//SYSLMOD DD PATH='/u/users/&C1SY./&C1SU./&C1EN(1,1)&C1S#./bin'
+//LUSSBN  ENDIF
+//LUSS    ELSE
+//SYSLMOD  DD   DISP=SHR,MONITOR=COMPONENTS,FOOTPRNT=CREATE,
+//              DSN=&PFX..LOADLIB
+//LUSS    ENDIF
+//*
+//SYSUT1   DD   UNIT=&VIO,SPACE=(TRK,(1,1))
+//SYSPRINT DD   DSN=&&LNKLST,DISP=(OLD,PASS)
+//SYSLOUT  DD   DSN=&&SYSLOUT,DISP=(OLD,PASS)
+//*
+//INCLIB   DD   DSN=&PFX..LNKINC,
+//              DISP=SHR,MONITOR=COMPONENTS,ALLOC=PMAP
+//****************************************************
+//*
+//* PRODUCT DISTRIBUTION MOD LIBS
+//*
+//****************************************************
+//****************************************************
+//*
+//* PRODUCT DISTRIBUTION PLD LIBS
+//*
+//****************************************************
+//*
+//****************************************************
+//*
+//SIEASID  DD   DSN=SYS1.SIEASID,
+//              DISP=SHR,MONITOR=COMPONENTS
+//B64BIND1 IF (&B64 EQ 'YES' | &CPP EQ 'YES') THEN
+//SCEELIB  DD   DSN=CEE.SCEELIB,DISP=SHR
+//B64BIND1 ENDIF
+//USSSDF IF (&SDF NE 'NO')  THEN
+//SDF    IF (&SDF EQ 'YES') THEN
+//SYSDEFSD DD   DSN=&PFX..SIDEDECK,
+//              DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE
+//SDF    ELSE
+//SYSDEFSD DD   DUMMY
+//SDF    ENDIF
+//USSSDF ENDIF
+//*
+//CPPBIND1 IF (&CPP EQ 'YES') THEN
+//SCLBSID  DD   DISP=SHR,DSN=CBC.SCLBSID
+//CPPBIND1 ENDIF
+//*
+//*YSLIB   DD   DISP=SHR,DSN=&#H..$EMPTY    EMPTY LIB TO START CONCAT
+//SYSLIB   DD   DSN=&PFX..OBJLIB,
+//              DISP=SHR,MONITOR=COMPONENTS,ALLOC=PMAP
+//*
+//*
+//         DD   DISP=SHR,DSN=SYS1.CSSLIB
+//B64BIND2 IF (&B64 EQ 'NO') THEN
+//         DD   DISP=SHR,DSN=CEE.SCEEOBJ
+//         DD   DISP=SHR,DSN=CEE.SCEELKEX
+//         DD   DISP=SHR,DSN=CEE.SCEELKED
+//B64BIND2 ELSE
+//         DD   DISP=SHR,DSN=CEE.SCEEBND2
+//B64BIND2 ENDIF
+//CPPBIND2 IF (&CPP EQ 'YES') THEN
+//         DD   DISP=SHR,DSN=CEE.SCEECPP
+//CPPBIND2 ENDIF
+//*
+//       IF ('&C1PRGRP(1,2)' EQ 'PR') THEN
+//         DD   DISP=SHR,DSN=&CIILIB        COBOL II CALL libarary
+//       ELSE
+//         DD   DISP=SHR,DSN=&CLELKED       COBOL\LE CALL library
+//       ENDIF
+//       IF (&XOBJLIB1 NE 'NULLFILE') THEN
+//         DD   DISP=SHR,MONITOR=COMPONENTS,DSN=&XOBJLIB1  Ext obj lib
+//       ENDIF
+//       IF (&XOBJLIB2 NE 'NULLFILE') THEN
+//         DD   DISP=SHR,MONITOR=COMPONENTS,DSN=&XOBJLIB2  Ext obj lib
+//       ENDIF
+//         DD   DISP=SHR,DSN=&#SDFHLOAD,    CICS lib
+//             MONITOR=COMPONENTS
+//         DD   DISP=SHR,DSN=&#SDSNLOAD,    DB2  lib
+//             MONITOR=COMPONENTS
+//*====================================================================
+//*        Copy listing to .LLISTLIB data set
+//*====================================================================
+//CONLIST  EXEC PGM=CONLIST,PARM=STORE,COND=EVEN
+//C1LLIBO  DD   DSN=&PFX..LLISTLIB,
+//              DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE
+//C1BANNER DD   UNIT=&VIO,SPACE=(TRK,(1,1)),
+//              DCB=(RECFM=FBA,LRECL=121,BLKSIZE=6171,DSORG=PS)
+//LIST01   DD   DSN=&&SYSLOUT,DISP=(OLD,PASS)
+//LIST02   DD   DSN=&&LNKLST,DISP=(OLD,PASS)
+//*====================================================================
+//*        Copy listing to sequential ds if PROD STAGE 2 & requested
+//*====================================================================
+//       IF (&C1EN EQ 'PRD') AND (&C1S# EQ '2') AND
+//            (&SEQLIST EQ 'Y') THEN
+//CONLIST2 EXEC PGM=CONLIST,PARM=PRINT,COND=EVEN
+//C1PRINT  DD   DSN=&PHL..&#LISTDSN,DISP=(NEW,CATLG),
+//              SPACE=(TRK,(3,4),RLSE),
+//              DCB=(RECFM=FBA,LRECL=133,BLKSIZE=0,DSORG=PS)
+//C1BANNER DD   UNIT=&VIO,SPACE=(TRK,(1,1)),
+//              DCB=(RECFM=FBA,LRECL=121,BLKSIZE=6171,DSORG=PS)
+//LIST01   DD   DSN=&&LNKLST,DISP=(OLD,DELETE)
+//       ENDIF
+//*
+//RELINK ELSE
+//NORELINK EXEC PGM=IEFBR14
+//RELINK ENDIF

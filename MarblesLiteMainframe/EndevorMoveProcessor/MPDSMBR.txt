@@ -1,0 +1,156 @@
+//*------------------------------------------------------------------*
+//* The symbolics in this processor contain naming conventions that  *
+//* may not be conducive to your site.  Modify as needed.            *
+//*                                                                  *
+//* The processor also uses SITE SYMBOLICS to manage naming          *
+//* conventions.  Adjust them accordingly.                           *
+//********************************************************************
+//*------------------------------------------------------------------*
+//*------------------------------------------------------------------*
+//MPDSMBR  PROC OUTLIB1=OBJLIB,
+//         OUTLIB2=LISTLIB,
+//         OUTLIB3=NULLFILE,
+//         OUTLIB4=NULLFILE,
+//             PHL=BSTPROD.ND13,       SET PRODUCT HLQ
+//         VIO=SYSDA,                  WORK UNIT
+//         SDF='NO',                   DLL
+//         B64='NO',                   bin
+//         CPP='NO',                   Bind with C++ Libs
+//         RELINK=NO,                  RELINK Impacted at Target
+//         CLELKED='CEE.SCEELKED',     COBOL\LE CALL library
+//         SDSNLOAD='&#SDSNLOAD',      DB2 SDSNLOAD
+//         SDFHLOAD='&#SDFHLOAD',      CICS SDFHLOAD
+//         XOBJLIB1='NULLFILE',        External macro library
+//         XOBJLIB2='NULLFILE',        External macro library
+//             PFX='&PHL..&C1SY..&C1SU..&C1EN(1,3)&C1S#.',
+//        SEQLIST=N,                          SAVE SEQUENTIAL LISTING
+//  LISTNM='&PHL..MOTL.&C1SY..&C1ELEMENT..&C1CCID(1,8,$).LST',
+//         SSUB='&C1SSUBSYS..',               SOURCE SUBSYSTEM
+//         SESTG='&C1SENVMNT(1,3)&C1SSTGNUM'  SOURCE ENV & STAGE
+//*
+//IFNOTLNK IF (&C1ELTYPE NE 'LNK') THEN
+//*
+//*  ALLOCATE THE OUTPUT SYSPRINT DATASET
+//*
+//INITLIST EXEC PGM=BC1PDSIN
+//C1INIT01 DD  DSN=&&SYSPRT,DISP=(,PASS),
+//             SPACE=(CYL,(5,5)),
+//             DCB=(RECFM=VBA,LRECL=137,DSORG=PS)
+//C1INIT02 DD   DSN=&&LNKLST,DISP=(,PASS),
+//              SPACE=(CYL,(2,1)),
+//              DCB=(RECFM=FBA,LRECL=121,BLKSIZE=1210,DSORG=PS)
+//*
+//* COPY MEMBER FROM OUTLIB1 IF NOT NULL
+//*
+//COPY1     EXEC PGM=BSTCOPY,MAXRC=0,
+//         EXECIF=(&OUTLIB1,NE,NULLFILE)
+//SYSPRINT  DD  DSN=&&SYSPRT,DISP=(MOD,PASS)
+//INPUT  DD DSN=&PHL..&C1SSYSTEM..&SSUB&SESTG...&OUTLIB1,DISP=SHR
+//OUTPUT DD DSN=&PFX..&OUTLIB1,
+//          DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE
+//SYSIN     DD  *
+   C INDD=INPUT,OUTDD=OUTPUT
+   S M=((&C1ELEMENT,,R))
+/*
+//*
+//* COPY MEMBER FROM OUTLIB2 IF NOT NULL
+//*
+//COPY2     EXEC PGM=BSTCOPY,MAXRC=0,
+//         EXECIF=(&OUTLIB2,NE,NULLFILE)
+//SYSPRINT  DD  DSN=&&SYSPRT,DISP=(MOD,PASS)
+//INPUT  DD DSN=&PHL..&C1SSYSTEM..&SSUB&SESTG...&OUTLIB2,DISP=SHR
+//OUTPUT DD DSN=&PFX..&OUTLIB2,
+//          DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE
+//SYSIN     DD  *
+   C INDD=INPUT,OUTDD=OUTPUT
+   S M=((&C1ELEMENT,,R))
+/*
+//*
+//* COPY MEMBER FROM OUTLIB3 IF NOT NULL
+//*
+//COPY3     EXEC PGM=BSTCOPY,MAXRC=0,
+//         EXECIF=(&OUTLIB3,NE,NULLFILE)
+//SYSPRINT  DD  DSN=&&SYSPRT,DISP=(MOD,PASS)
+//INPUT  DD DSN=&PHL..&C1SSYSTEM..&SSUB&SESTG...&OUTLIB3,DISP=SHR
+//OUTPUT DD DSN=&PFX..&OUTLIB3,
+//          DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE
+//SYSIN     DD  *
+   C INDD=INPUT,OUTDD=OUTPUT
+   S M=((&C1ELEMENT,,R))
+/*
+//*
+//* COPY MEMBER FROM OUTLIB4 IF NOT NULL
+//*
+//COPY4     EXEC PGM=BSTCOPY,MAXRC=0,
+//         EXECIF=(&OUTLIB4,NE,NULLFILE)
+//SYSPRINT  DD  DSN=&&SYSPRT,DISP=(MOD,PASS)
+//INPUT  DD DSN=&PHL..&C1SSYSTEM..&SSUB&SESTG...&OUTLIB4,DISP=SHR
+//OUTPUT DD DSN=&PFX..&OUTLIB4,
+//          DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE
+//SYSIN     DD  *
+   C INDD=INPUT,OUTDD=OUTPUT
+   S M=((&C1ELEMENT,,R))
+/*
+//*
+//* PRINT TEMP SYSPRINT DSN IF ANY STEP NE 0
+//*
+//PRTCOPY  EXEC PGM=IEBGENER,COND=(0,EQ)
+//SYSPRINT DD DUMMY
+//SYSUT1 DD DSN=&&SYSPRT,DISP=(OLD,DELETE)
+//SYSUT2 DD SYSOUT=*
+//SYSIN    DD DUMMY
+//*
+//IFRELINK IF (&RELINK EQ 'YES') THEN
+//*
+//*--------------------------------------------------------------------
+//*        Fetch LINK DECK from concat for System  (Required)
+//*--------------------------------------------------------------------
+//SYSLIN   EXEC PGM=IEBUPDTE,MAXRC=0
+//SYSPRINT DD   DUMMY
+//SYSIN    DD   *
+./  REPRO NEW=PS,NAME=&C1ELEMENT
+//SYSUT1   DD   DISP=SHR,DSN=&PFX..LNK,
+//              MONITOR=COMPONENTS,ALLOC=PMAP
+//SYSUT2   DD   DSN=&&SYSLIN,DISP=(,PASS),
+//              SPACE=(TRK,(10,10)),
+//              DCB=(RECFM=FB,LRECL=80,BLKSIZE=27920)
+//*====================================================================
+//*        LINK all impacted loads
+//*====================================================================
+//RELINK   EXEC PGM=IEWL,MAXRC=4,
+//              PARM='LIST,MAP,XREF'
+//*--------------------------------------------------------------------
+//*        Expand libraries needed by Binder.
+//*!!!!!!! SYSLIB DD is last; can add to concatenation list inline !!!!
+//*--------------------------------------------------------------------
+-INC GLNKLIBS
+//*====================================================================
+//*        Copy listing to .LLISTLIB data set
+//*====================================================================
+//CONLIST  EXEC PGM=CONLIST,PARM=STORE,COND=EVEN
+//C1LLIBO  DD   DSN=&PFX..LLISTLIB,
+//              DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE
+//C1BANNER DD   UNIT=&VIO,SPACE=(TRK,(1,1)),
+//              DCB=(RECFM=FBA,LRECL=121,BLKSIZE=6171,DSORG=PS)
+//LIST01   DD   DSN=&&LNKLST,DISP=(OLD,DELETE)
+//*
+//IFRELINK ELSE
+//NORELINK EXEC PGM=IEFBR14
+//IFRELINK ENDIF
+//*
+//IFNOTLNK ENDIF
+//*
+//*
+//*  PLACE THE LISTING IN SEQ DS IF PROD STAGE 2, GA & requested..
+//*
+//SEQLIST  EXEC PGM=CONLIST,PARM=PRTMBR,MAXRC=0,
+//         EXECIF=((&C1EN,EQ,PRD),(&C1S#,EQ,'2'),
+//                 (&SEQLIST,EQ,'Y'),(&C1SU,EQ,'GA'))
+//C1LLIBI  DD DSN=&PFX..LISTLIB,DISP=SHR
+//C1PRINT  DD DSN=&LISTNM,DISP=(NEW,CATLG),
+//              SPACE=(TRK,(15,75),RLSE),
+//              DCB=(RECFM=FBA,LRECL=133,BLKSIZE=0,DSORG=PS)
+//*------------------------------------------------------------------*
+//* Move the source element component list.                          *
+//*------------------------------------------------------------------*
+//BC1PMVCL EXEC PGM=BC1PMVCL,MAXRC=0

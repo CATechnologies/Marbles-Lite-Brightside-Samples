@@ -1,0 +1,300 @@
+//********************************************************************
+//* GCOBP: Endevor processor for COBOL with PRECOMILER support
+//*        Every symbolic is more or less self explanatory.
+//*        See Type defn for COBPGM and related Pprocessor Groups.
+//*        Processor Group naming standard:  ccoed›zzz®
+//*          cc = Compiler
+//*            LE = LE version of standard IBM compiler
+//*            PR = Pre-LE version of standard IBM compiler
+//*            NI = Non-IBM compiler
+//*          o = Operating system
+//*            M = MVS
+//*            V = VM
+//*            E = VSE
+//*          e = Environment
+//*            B = Batch or TSO environment
+//*            C = CICS environment
+//*            I = IMS/DC environment
+//*            D = IDMS/DC environment
+//*          d = Database requirement
+//*            X = No database required
+//*            1 = Datacom database required (the preferred #1 db)
+//*            2 = DB2 database required (the db with a 2 in its name)
+//*            3 = IMS database required (the db with a 3-char name)
+//*            4 = IDMS database required (the db with a 4-char name)
+//*          zzz = Unique requirements (blank if none)
+//*             DB2='CCSID(500),APOST,APOSTSQL,SOURCE,SQLLEVEL(V10R1)',
+//********************************************************************
+//* The symbolics in this processor contain naming conventions that  *
+//* may not be conducive to your site.  Modify as needed.            *
+//*                                                                  *
+//* The processor also uses SITE SYMBOLICS to manage naming          *
+//* conventions.  Adjust them accordingly.                           *
+//********************************************************************
+//GCOBP    PROC PARMA='APOST',
+//              PARMZ=,
+//              DB2='CCSID(500),APOST,APOSTSQL,SOURCE',
+//              PFX='&#BASEPRFX.',    Endevor dsname prefix
+//              VIO='SYSDA',                UNIT= for utility data sets
+//              IDMSDICT='R17IDMS',         Default IDMS dictionary
+//              MACLIB='SYS1.MACLIB',       z/OS SYS1.MACLIB
+//              MODGEN='SYS1.MODGEN',       z/OS SYS1.MODGEN
+//              XMACLIB1='SYS1.MACLIB',     External macro library
+//              XMACLIB2='SYS1.MACLIB',     External macro library
+//              CEEMAC='CEE.SCEEMAC',       z/OS cee macs
+//              CAMAC1='CAI.S910.MACLIB',   COMM SERVICES?
+//              SDSNLOAD='ISLDB2.DB2C10.GA.RSU1703.SDSNLOAD',   DB2
+//              SDSNMACS='ISLDB2.DB2C10.GA.RSU1703.SDSNMACS',   DB2
+//              SDSNEXIT='ISLDB2.DB2C10.GA.RSU1703.SDSNLOAD',   DB2
+//              SDFHLOAD='RSTCNTL.CTS520.CA13.CICS.MAINT.SDFHLOAD',
+//              SDFHMAC='RSTCNTL.CTS520.CA13.CICS.MAINT.SDFHMAC',
+//              CLECOMP='IGY.SIGYCOMP',     COBOL/LE compiler
+//              CLERUN='CEE.SCEERUN',       COBOL/LE runtime
+//              CIICOMP='RSTSYS.COB2.V1R4M0.COB2COMP', COB 2 compiler
+//              CIILIB='RSTSYS.COB2.V1R4M0.COB2LIB', COB 2  runtime
+//              SEQLIST='N'                 Create sequential listing
+//*====================================================================
+//*        Allocate the output listing data sets
+//*====================================================================
+//INITLIST EXEC PGM=BC1PDSIN
+//C1INIT01 DD   DSN=&&COBLST,DISP=(,PASS),
+//              SPACE=(CYL,(5,5)),
+//              DCB=(RECFM=FBA,LRECL=133,DSORG=PS)
+//C1INIT02 DD   DSN=&&COBTRM,DISP=(,PASS),
+//              SPACE=(CYL,(5,5)),
+//              DCB=(RECFM=FBA,LRECL=133,DSORG=PS)
+//C1INIT03 DD   DSN=&&DB2PLST,DISP=(,PASS),
+//              SPACE=(CYL,(5,5)),
+//              DCB=(RECFM=FBA,LRECL=133,DSORG=PS)
+//C1INIT05 DD   DSN=&&IDMPLST,DISP=(,PASS),
+//              SPACE=(CYL,(5,5)),
+//              DCB=(RECFM=FBA,LRECL=133,DSORG=PS)
+//C1INIT06 DD   DSN=&&LNKLST,DISP=(,PASS),
+//              SPACE=(CYL,(2,1)),
+//              DCB=(RECFM=FBA,LRECL=121,BLKSIZE=1210,DSORG=PS)
+//C1INIT07 DD   DSN=&&COBOBJ,DISP=(,PASS),
+//              SPACE=(CYL,(2,1)),
+//              DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120,DSORG=PS)
+//*====================================================================
+//*        Check if preprocessors needed
+//*====================================================================
+//IFPRE IF '&C1PRGRP' NE 'LEMCX' THEN
+//*
+//*       ----- START OF PRE COMPILER LOGIC ------
+//*
+//**********************************************************************
+//*    DB2 PRECOMPILIER PROCESSING -  LEM?2
+//*********************************************************************
+//*B2PRE   EXEC PGM=DSNHPC,PARM='HOST(COBOL)',
+//*B2PRE   EXEC PGM=DSNHPC,PARM='HOST(COB2),SOURCE,APOSTSQL,QUOTE',
+//DB2PRE   EXEC PGM=DSNHPC,PARM='&DB2',
+//            COND=(0,LT),MAXRC=4,
+//            EXECIF=(&C1PRGRP(5,1),EQ,2)
+//STEPLIB   DD DSN=&SDSNEXIT,DISP=SHR
+//          DD DSN=&SDSNLOAD,DISP=SHR
+//DBRMLIB   DD DSN=&&DBRMOUT(&C1ELEMENT),DISP=(,PASS),
+//             UNIT=&VIO,SPACE=(CYL,(1,1,5),RLSE),
+//             DCB=(RECFM=FB,LRECL=80,BLKSIZE=6160)
+//SYSIN     DD DSN=&C1BASELIB(&C1ELEMENT),DISP=SHR,MONITOR=COMPONENTS
+//SYSCIN    DD DSN=&&DB2OUT,DISP=(,PASS),
+//             UNIT=&VIO,SPACE=(CYL,(1,2)),
+//             DCB=(RECFM=FB,LRECL=80,BLKSIZE=6160)
+//SYSLIB    DD DSN=&SDSNMACS,DISP=SHR
+//SYSTERM   DD SYSOUT=*
+//SYSPRINT  DD DSN=&&DB2PLST,DISP=(OLD,PASS)
+//SYSUT1    DD UNIT=&VIO,SPACE=(CYL,(1,1))
+//SYSUT2    DD UNIT=&VIO,SPACE=(CYL,(1,1))
+//**********************************************************************
+//*   GENR IF DB2 PRE NOT EXECUTED
+//*********************************************************************
+//DB2GENR  EXEC PGM=IEBGENER,
+//            EXECIF=('&C1PRGRP(5,1)',NE,'2')
+//SYSPRINT DD  DUMMY
+//SYSIN    DD  DUMMY,DCB=BLKSIZE=80
+//SYSUT1   DD  DSN=&C1BASELIB(&C1ELEMENT),DISP=SHR,MONITOR=COMPONENTS
+//SYSUT2   DD  DSN=&&DB2OUT,DISP=(,PASS),
+//             UNIT=&VIO,SPACE=(CYL,(1,2)),
+//             DCB=(RECFM=FB,LRECL=80,BLKSIZE=6160)
+//**********************************************************************
+//*   CICS PRECOMPILIER PROCESSING  LEMC? FOR COBOL
+//*********************************************************************
+//CICSPRE  EXEC PGM=DFHECP1$,PARM='COBOL2',
+//            MAXRC=4,
+//            EXECIF=('&C1PRGRP(4,1)',EQ,'C'),
+//            COND=(5,LT,DB2PRE)
+//STEPLIB  DD  DSN=&SDFHLOAD,DISP=SHR
+//*
+//*--------------------------------------------------------------------
+//*        STEPLIB to requested cobol version
+//*--------------------------------------------------------------------
+//       IF ('&C1PRGRP(1,2)' EQ 'LE') THEN
+//         DD   DSN=&CLECOMP,DISP=SHR       COBOL/LE compiler library
+//         DD   DSN=&CLERUN,DISP=SHR        COBOL/LE runtime library
+//       ENDIF
+//       IF ('&C1PRGRP(1,2)' EQ 'PR') THEN
+//         DD   DSN=&CIICOMP,DISP=SHR       COBOL/II compiler library
+//         DD   DSN=&CIILIB,DISP=SHR        COBOL/II runtime library
+//       ENDIF
+//SYSPRINT DD  SYSOUT=*
+//SYSIN    DD  DSN=&&DB2OUT,
+//             DISP=(OLD,DELETE,DELETE)
+//SYSPUNCH DD  DSN=&&CICSOUT,
+//             UNIT=&VIO,
+//             DISP=(NEW,PASS),
+//             DCB=BLKSIZE=400,
+//             SPACE=(CYL,(1,2))
+//**********************************************************************
+//*   GENR IF CICS PRE NOT EXECUTED
+//*********************************************************************
+//CICGENR EXEC PGM=IEBGENER,
+//            EXECIF=('&C1PRGRP(4,1)',NE,'C')
+//SYSPRINT DD  DUMMY
+//SYSIN    DD  DUMMY,DCB=BLKSIZE=80
+//SYSUT1   DD  DSN=&&DB2OUT,DISP=(OLD,DELETE)
+//SYSUT2   DD  DSN=&&CICSOUT,DISP=(,PASS),
+//             UNIT=&VIO,SPACE=(CYL,(1,2)),
+//             DCB=(RECFM=FB,LRECL=80,BLKSIZE=6160)
+//***********************************************
+//*  IDMS PRECOMPILER PROCESSING - LEM?4
+//***********************************************
+//IDMSPRE  EXEC PGM=IDMSDMLA,MAXRC=4,
+//            EXECIF=('&C1PRGRP(5,1)',EQ,'4')
+//STEPLIB   DD DSN=DBDC.SYSTEM79.DBA.LOADLIB,DISP=SHR
+//          DD DSN=DIST.CAABG0.PRODTGT.CABG0LLT,DISP=SHR
+//          DD DSN=DIST.CAGJG0.PRODTGT.LOADLIB,DISP=SHR
+//*         DD DSN=&IDMSLOD,DISP=SHR
+//SYSLST    DD DSN=&&IDMPLST,DISP=(OLD,PASS)
+//SYSJRNL   DD DUMMY
+//J1JRNL    DD DUMMY
+//J2JRNL    DD DUMMY
+//SYS001    DD UNIT=&VIO,SPACE=(TRK,(15,10))
+//SYS002    DD UNIT=&VIO,SPACE=(TRK,(15,10))
+//SYS003    DD UNIT=&VIO,SPACE=(TRK,(15,10))
+//SYSPCH    DD DSN=&&IDMSOUT,DISP=(NEW,PASS),UNIT=&VIO,
+//             SPACE=(CYL,(2,1)),
+//             DCB=(RECFM=FB,LRECL=80,BLKSIZE=9040)
+//SYSIDMS  DD *
+DMCL=S79DMCL
+DICTNAME=&IDMSDICT
+/*
+//SYSIPT   DD *
+*RETRIEVAL
+*NO-ACTIVITY-LOG
+*SCHEMA-COMMENTS
+//          DD DSN=&&CICSOUT,DISP=(OLD,DELETE)
+//*******************************************************
+//* COPY ELMOUT TO PREOUT IF PREPROCSSOR WASN'T EXECUTED
+//*******************************************************
+//IDMGENR   EXEC PGM=IEBGENER,
+//            EXECIF=('&C1PRGRP(5,1)',NE,'4')
+//SYSUT1   DD  DSN=&&CICSOUT,DISP=(OLD,DELETE)
+//SYSUT2   DD  DSN=&&IDMSOUT,DISP=(NEW,PASS),
+//             SPACE=(CYL,(1,1)),UNIT=&VIO,
+//             DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+//SYSIN    DD  DUMMY,DCB=BLKSIZE=80
+//SYSPRINT DD  SYSOUT=*
+//*
+//IFPRE ENDIF    --- END OF PRE PROCESSOR LOGIC ----
+//*
+//*====================================================================
+//*        Call compiler and pass options via CONPARMX -
+//*====================================================================
+//*PARM=(compiler,     Program to be run -1-
+//*      '(&PARMA)', Values from &PARMA Symbolic -2-
+//*      $$$$DFLT,   Default System Level Options element -3-
+//*      &C1PRGRP,   Processor Group Level Options element -4-
+//*      &C1ELEMENT, Individual Element Level Options  -5-
+//*      '(&PARMZ)', Values from &PARMZ Symbolic -6-
+//*      Y,          Concatenate parms a to z -7-
+//*      N)          Build option file to pass or invoke program -8-
+//*  Last option entry in string takes precsedence with compilers
+//*
+//*====================================================================
+//*        Invoke the Compiler
+//*    PARM=(NOSEQUENCE,QUOTE,RENT,'PGMNAME(LONGUPPER)'),
+//*====================================================================
+//COMPILE  EXEC PGM=CONPARMX,COND=(0,NE,INITLIST),MAXRC=4,
+//             PARM=(IGYCRCTL,'(&PARMA)',&C1PRGRP,&C1PRGRP,
+//                   &C1ELEMENT,'(&PARMZ)','Y','N')
+//*
+//PARMSDEF DD DISP=SHR,DSN=&PFX..PARM,
+//         MONITOR=COMPONENTS,ALLOC=PMAP
+//         DD DISP=SHR,DSN=&PFX..PARMS,
+//         MONITOR=COMPONENTS,ALLOC=PMAP
+//*
+//*--------------------------------------------------------------------
+//*        STEPLIB to requested compiler library
+//*--------------------------------------------------------------------
+//       IF ('&C1PRGRP(1,2)' EQ 'LE') THEN
+//STEPLIB  DD   DSN=&CLECOMP,DISP=SHR       COBOL/LE compiler library
+//         DD   DSN=&CLERUN,DISP=SHR        COBOL/LE runtime library
+//       ENDIF
+//       IF ('&C1PRGRP(1,2)' EQ 'PR') THEN
+//STEPLIB  DD   DSN=&CIICOMP,DISP=SHR       COBOL/II compiler library
+//         DD   DSN=&CIILIB,DISP=SHR        COBOL/II runtime library
+//       ENDIF
+//*--------------------------------------------------------------------
+//*
+//*--------------------------------------------------------------------
+//*        Expand libraries needed by cobol .
+//*!!!!!!! SYSLIB DD is last; can add to concatenation list inline !!!!
+//*--------------------------------------------------------------------
+//* -INC GCOBLIB2
+//SYSLIB   DD   DSN=&PFX..COBCOPY,
+//              DISP=SHR,MONITOR=COMPONENTS,ALLOC=PMAP
+//*------------------------------------------------------------------
+//*        If any precompilers ran then different SYSIN
+//*------------------------------------------------------------------
+//IFMBX IF '&C1PRGRP(4,1)' EQ 'X' THEN
+//SYSIN    DD   DSN=&C1BASELIB(&C1ELEMENT),DISP=SHR,MONITOR=COMPONENTS
+//IFMBX ELSE
+//SYSIN    DD   DSN=&&IDMSOUT,DISP=(OLD,DELETE)
+//IFMBX ENDIF
+//*------------------------------------------------------------------
+//SYSLIN   DD   DSN=&&SYSLIN,DISP=(,PASS,DELETE),
+//              UNIT=&VIO,SPACE=(CYL,(3,5),RLSE),
+//              DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120,DSORG=PS),
+//              FOOTPRNT=CREATE
+//SYSPUNCH DD   DUMMY
+//SYSUT1   DD   UNIT=&VIO,SPACE=(CYL,(5,3)),DCB=BLKSIZE=32760
+//SYSUT2   DD   UNIT=&VIO,SPACE=(CYL,(5,3))
+//SYSUT3   DD   UNIT=&VIO,SPACE=(CYL,(5,3))
+//SYSUT4   DD   UNIT=&VIO,SPACE=(CYL,(5,3))
+//SYSUT5   DD   UNIT=&VIO,SPACE=(CYL,(5,3))
+//SYSUT6   DD   UNIT=&VIO,SPACE=(CYL,(5,3))
+//SYSUT7   DD   UNIT=&VIO,SPACE=(CYL,(5,3))
+//SYSPRINT DD   DSN=&&COBLST,DISP=(OLD,PASS)
+//SYSTERM  DD   DSN=&&COBTRM,DISP=(OLD,PASS)
+//*====================================================================
+//*        Copy DBRM if compile okay
+//*====================================================================
+//IFDB2    IF  ('&C1PRGRP(5,1)' EQ '2') THEN
+//DBRMCOPY  EXEC PGM=IEBGENER,COND=(4,LT)
+//SYSPRINT DD   DUMMY
+//SYSUT1   DD   DSN=&&DBRMOUT(&C1ELEMENT),DISP=(OLD,DELETE)
+//SYSUT2   DD   DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE,
+//              DSN=&PFX..DBRMLIB(&C1ELEMENT.)
+//SYSIN    DD   DUMMY
+//IFDB2    ENDIF
+//*====================================================================
+//*        Copy object to .OBJLIB data set
+//*====================================================================
+//OBJCOPY  EXEC PGM=IEBGENER,COND=(4,LT)
+//SYSPRINT DD   DUMMY
+//SYSUT1   DD   DSN=&&SYSLIN,DISP=(OLD,DELETE)
+//SYSUT2   DD   DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE,
+//              DSN=&PFX..OBJLIB(&C1ELEMENT.)
+//SYSIN    DD   DUMMY
+//*
+//*====================================================================
+//*        Copy listing to .LISTLIB data set
+//*====================================================================
+//CONLIST  EXEC PGM=CONLIST,PARM=STORE,MAXRC=0,COND=EVEN
+//C1LLIBO  DD   DSN=&PFX..LISTLIB,
+//              DISP=OLD,MONITOR=COMPONENTS,FOOTPRNT=CREATE
+//C1BANNER DD   UNIT=&VIO,SPACE=(TRK,(1,1)),
+//              DCB=(RECFM=FBA,LRECL=121,BLKSIZE=6171,DSORG=PS)
+//LIST01   DD   DSN=&&DB2PLST,DISP=(OLD,DELETE)
+//LIST02   DD   DSN=&&COBTRM,DISP=(OLD,DELETE)
+//LIST03   DD   DSN=&&COBLST,DISP=(OLD,DELETE)
+//*
