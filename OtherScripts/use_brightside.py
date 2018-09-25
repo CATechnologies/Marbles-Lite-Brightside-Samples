@@ -1,8 +1,6 @@
 import subprocess
 import os
 import json
-import sys 
-
 bright_extension = ""
 if os.name == 'nt':
     bright_extension = ".cmd"
@@ -14,11 +12,11 @@ bright_output_str = subprocess.check_output(
 bright_output = json.loads(bright_output_str)  # parse the json response
 
 if not bright_output["success"]:
-    print ("List jobs command failed!")
-    print (str(bright_output["stderr"])
+    print "List jobs command failed!"
+    print str(bright_output["stderr"])
+    exit(1)
 
-if bright_output["success"]:
-	jobs = bright_output["data"]
+jobs = bright_output["data"]
 
-	for job in jobs:
-		print ("Found job name " + job["jobname"] + " status: " + job["status"])
+for job in jobs:
+    print "Found job name " + job["jobname"] + " status: " + job["status"]
