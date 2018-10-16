@@ -1,0 +1,201 @@
+#!/usr/bin/env groovy
+
+import groovy.transform.Field
+
+// The following property need to be set for the HTML report
+System.setProperty("hudson.model.DirectoryBrowserSupport.CSP", "")
+
+def _AGENTS = ['docker-build-agent', 'docker-remote-agent']
+def _CLIENT_BUILD_AGENT = 'docker-brightside-next-agent'
+def _NPM_AGENT = 'docker-brightside-next-agent'
+def _MAINFRAME_BUILD_AGENT = 'docker-brightside-next-agent'
+def _BRIGHTSIDE_BUILD_AGENT = 'docker-brightside-next-agent'
+def _CHROME_TEST_AGENT = 'docker-chrome-agent'
+def _MAINFRAME_TEST_AGENT = 'docker-remote-agent'
+def _CLIENT_DEPLOY_MASTER = 'deploy-agent-1'
+def _CLIENT_DEPLOY_AGENT = 'deploy-agent-2'
+
+def _APPROVERS_EMAIL = 'nurra01@ca.com, uzuko01@ca.com'
+
+// Each stage shall have 15 minutes to run and quit if it take longer
+def _TIMEOUT_TIME = 30
+def _TIMEOUT_UNIT = 'MINUTES'
+
+@Field String HOST_URL = 'http://marbles-lite-jenkins.ca.com'
+@Field String CLIENT_URL = ''
+@Field String MF_URL = ''
+
+// Config pipeline to discard old build and artifacts after a fix period
+properties([[$class: 'BuildDiscarderProperty',
+             strategy: [$class: 'LogRotator',
+                        artifactDaysToKeepStr: '',
+                        artifactNumToKeepStr: '',
+                        daysToKeepStr: '',
+                        numToKeepStr: '20']
+]]);
+
+node {
+    try {
+        stage('checkout') {
+            // Need to check out the code in order to load the external script!
+            checkout scm
+        }
+        stage('Linting') {
+            timeout(time: _TIMEOUT_TIME, unit: _TIMEOUT_UNIT) {
+                echo 'Start Linting'
+                def builders = [:]
+                builders['client'] = {
+                    def clientLinting = load 'scripts/jenkinsfile/linting/client.groovy'
+                    clientLinting(_NPM_AGENT)
+                }
+                builders['server'] = {
+                    def serverLinting = load 'scripts/jenkinsfile/linting/server.groovy'
+                    serverLinting(_NPM_AGENT)
+                }
+                builders['gulp'] = {
+                    def gulpLinting = load 'scripts/jenkinsfile/linting/gulp.groovy'
+                    gulpLinting(_NPM_AGENT)
+                }
+                parallel builders
+            }
+        }
+        stage('Unit Test') {
+            timeout(time: _TIMEOUT_TIME, unit: _TIMEOUT_UNIT) {
+                echo 'Start Unit Test'
+                def builders = [:]
+                builders['client'] = {
+                    def clientUnitTest = load 'scripts/jenkinsfile/unit-test/client.groovy'
+                    clientUnitTest(_CHROME_TEST_AGENT)
+                }
+                builders['server'] = {
+                    def serverUnitTest = load 'scripts/jenkinsfile/unit-test/server.groovy'
+                    serverUnitTest(_NPM_AGENT)
+                }
+                parallel builders
+            }
+        }
+        stage('Build') {
+            timeout(time: _TIMEOUT_TIME, unit: _TIMEOUT_UNIT) {
+                echo 'Start Build'
+                def builders = [:]
+                builders['client build'] = {
+                    def clientBuild = load 'scripts/jenkinsfile/disClientBuild.groovy'
+                    clientBuild(_CLIENT_BUILD_AGENT)
+                }
+                builders['mainframe build'] = {
+                    def mainframeBuild = load 'scripts/jenkinsfile/disMainframeBuild.groovy'
+                    mainframeBuild(_MAINFRAME_BUILD_AGENT)
+                }
+                parallel builders
+            }
+        }
+        stage('Deploy to Integration System') {
+            timeout(time: _TIMEOUT_TIME, unit: _TIMEOUT_UNIT) {
+                echo "Trigger deploy to integration test..."
+                echo "Branch: " + BRANCH_NAME
+
+                def builders = [:]
+                def clientDeploy
+                def mainframeDeploy
+
+                if (BRANCH_NAME == 'master') {
+                    echo "before calling deploy - Client & Mainframe"
+                    clientDeploy = load 'scripts/jenkinsfile/disClientDeploy.groovy'
+                    mainframeDeploy = load 'scripts/jenkinsfile/disMainframeDeploy.groovy'
+
+                    builders[_CLIENT_DEPLOY_MASTER] = {
+                        CLIENT_URL = clientDeploy(_CLIENT_DEPLOY_MASTER, HOST_URL)
+                    }
+                    builders['mainframe deploy'] = {
+                        MF_URL = mainframeDeploy(_NPM_AGENT)
+                    }
+                } else {
+                    echo "before calling deploy - Client"
+                    clientDeploy = load 'scripts/jenkinsfile/disClientDeploy.groovy'
+
+                    builders[_CLIENT_DEPLOY_AGENT] = {
+                        CLIENT_URL = clientDeploy(_CLIENT_DEPLOY_AGENT, HOST_URL)
+                    }
+                }
+                parallel builders
+
+                echo "MF URL: " + MF_URL
+                echo "Client URL: " + CLIENT_URL
+            }
+        }
+        stage('Integration Test') {
+            timeout(time: _TIMEOUT_TIME, unit: _TIMEOUT_UNIT) {
+                echo 'Start integration test'
+                def builders = [:]
+                builders['client test'] = {
+                    def integrationTest = load 'scripts/jenkinsfile/integration/run.groovy'
+                    // Test on the chrome agent using the DEPLOY url.
+                    integrationTest(_CHROME_TEST_AGENT, MF_URL ? MF_URL : CLIENT_URL)
+                }
+                builders['system test'] = {
+                    def systemTest = load 'scripts/jenkinsfile/integration/backend.groovy'
+                    // Test on the chrome agent using the DEPLOY url.
+                    systemTest(_BRIGHTSIDE_BUILD_AGENT)
+                }
+                parallel builders
+            }
+        }
+        stage('Deploy to Production Systems') {
+            timeout(time: _TIMEOUT_TIME, unit: _TIMEOUT_UNIT) {
+                echo 'Trigger Endevor Packaging define and cast...'
+                echo "Branch: " + BRANCH_NAME
+
+                def endevorPackage = load 'scripts/jenkinsfile/endevorPackaging.groovy'
+                endevorPackage(_MAINFRAME_BUILD_AGENT, _APPROVERS_EMAIL)
+            }
+        }
+    } catch (e) {
+        currentBuild.result = 'FAILED'
+        throw e
+    }
+}
+
+stage('Approve Endevor Package') {
+    timeout(time: _TIMEOUT_TIME, unit: _TIMEOUT_UNIT) {
+        input('Continue Execution of the Endevor Package?')
+    }
+}
+
+node() {
+    try {
+        stage('Execute Endevor Package') {
+            echo 'Execute Endevor Package'
+            def executeEndevorPackage = load 'scripts/jenkinsfile/endevorExxecutePackage.groovy'
+            executeEndevorPackage(_MAINFRAME_BUILD_AGENT)
+        }
+        stage('Performance Test') {
+            timeout(time: _TIMEOUT_TIME, unit: _TIMEOUT_UNIT) {
+                node() {
+                    echo 'Trigger performance test...'
+                }
+            }
+        }
+    } catch (e) {
+        currentBuild.result = 'FAILED'
+        throw e
+    } finally {
+        def notify = load 'scripts/jenkinsfile/notifyResult.groovy'
+        if (currentBuild.currentResult == 'SUCCESS'){
+            def description = """<p>Client deployment: <a href="${CLIENT_URL}"> ${CLIENT_URL}</a></p>""" + (MF_URL ? """<p>Mainframe deployment: <a href="${MF_URL}"> ${MF_URL}</a></p>""" : "")
+            currentBuild.description = description
+
+            if (currentBuild.previousBuild == null ||
+                    currentBuild.currentResult != currentBuild.previousBuild.result){
+                notify(currentBuild.result, MF_URL ? MF_URL : CLIENT_URL)
+            }
+        } else {
+            notify(currentBuild.result, MF_URL ? MF_URL : CLIENT_URL)
+        }
+    }
+}
+
+def dummyEcho(String agentLabel = 'master'){
+    node(agentLabel){
+        sh "echo dummy echo on " + agentLabel
+    }
+}
