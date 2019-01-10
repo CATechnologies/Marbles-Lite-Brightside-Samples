@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+
+# Alternative example
+# put set +x and leave echoes
+# put set -ex and skip the echoes. 
+# e Set the shell to exit immediately if a command exits with a nonzero exit value
+# x Set the shell to display script input/output
+# set -ex
+set +x
+
+tries=20
+wait=5
+
+function submitJCL () {
+    ds=$1
+    JobType=$2
+    JobMsg=$3
+  
+    # Run a job. Capture job id in a variable.
+    echo $JobType $JobMsg
+    echo 'bright jobs submit data-set ' $ds '--rff jobid --rft string'
+    jobid=`bright jobs submit data-set $ds --rff jobid --rft string`
+    echo $jobid
+    echo ''
+
+    # Check job status
+    echo "Check status of" $2
+    sleep 2
+    echo 'bright jobs view job-status-by-jobid' $jobid '--rff retcode --rft string'
+    retcode=`bright jobs view job-status-by-jobid $jobid --rff retcode --rft string`
+    echo $retcode
+    
+    # Repeatedly check job status until not null
+    counter=0
+    while (("$counter" < $tries)) && [ "$retcode" == "null" ]; do
+        ((counter++))
+        sleep $wait
+        
+        echo 'bright jobs view job-status-by-jobid' $jobid '--rff retcode --rft string'
+        retcode=`bright jobs view job-status-by-jobid $jobid --rff retcode --rft string`
+        echo $retcode
+    done
+
+    if [ "$retcode" == "null" ]; then
+       echo $ds 'timed out'
+       echo ''
+       exit 1
+    elif [ "$retcode" != "CC 0000" ]; then
+       echo $ds 'did not complete with CC 0000'
+       echo ''
+       exit 1
+    else
+       #echo ''
+       echo 'Success -' $JobType 'Run Successfully'
+       echo ''
+    fi
+
+    if [ "$JobType" == "RUN" ]; then
+        # View the output of the cobol program. 
+        # For example:  Hello, Lisle Technical Conference!
+        # This amounts to viewing the SYSOUT spool file. 
+        # spool-file-by-id    | sfbi    View a spool file from a z/OS job
+        
+        runsysout=`bright jobs view sfbi $jobid 103`
+        # Check job status
+        echo "Output of the Program"
+        sleep 1
+        echo $runsysout
+        echo ''
+        
+        #bright jobs view sfbi $jobid 103
+    fi
+}
+
+function introMsg () {
+  
+    echo "A bash script to COMPILE and RUN a Hello World program *"
+    echo ''
+    sleep 1
+
+    #   Compiling the Cobol
+    #   Running the Cobol
+    #   Viewing the output of the run Cobol program
+    #   This also includes the JCL files needed for compiling and the Cobol file.
+}
+
+# Main
+
+# Provide a title
+introMsg 
+
+# compile the Cobol
+submitJCL "LAPJO01.PUBLIC.JCL(COBOL)" "COMPILE"  "the program"
+
+# Run the cobol
+submitJCL "LAPJO01.PUBLIC.JCL(CBLRUN)" "RUN" "the program"
+
+

@@ -1,0 +1,29 @@
+
+ DESCRIPTION
+ -----------
+
+   List data sets and data set members. Optionally, you can list their details and
+   attributes.
+
+ USAGE
+ -----
+
+   bright zos-files list [command]
+
+ COMMANDS
+ --------
+
+   all-members | am List all members of a pds
+   data-set | ds    List data sets           
+
+ GLOBAL OPTIONS
+ --------------
+
+   --response-format-json  | --rfj (boolean)
+
+      Produce the command response as a JSON document
+
+   --help  | -h (boolean)
+
+      Display help text
+

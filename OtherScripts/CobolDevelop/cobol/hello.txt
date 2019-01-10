@@ -1,0 +1,6 @@
+       IDENTIFICATION DIVISION.                                         00010000
+       PROGRAM-ID.  Shortest.                                           00020000
+       PROCEDURE DIVISION.                                              00030000
+       DisplayPrompt.                                                   00040000
+           DISPLAY "Hello, Mainframe DevOps Users!".                    00050000
+           STOP RUN.                                                    00060000
