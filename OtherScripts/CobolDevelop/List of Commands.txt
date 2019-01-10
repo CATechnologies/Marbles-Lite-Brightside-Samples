@@ -1,0 +1,71 @@
+
+# Editing a Cobol probgram and running it on Mainframe
+# This includes a series of commands for 
+#   downloading the cobol file
+#   uploading it back to Mainframe
+#   Compiling the Cobol
+#   Running the Cobol
+#   Viewing the output of the run Cobol program
+# This also includes the JCL files needed for compiling and the Cobol file.
+#
+# I have all the materials in a folder on my desktop.   
+
+# Create Profile: Only needed if you are starting out and showing install etc. 
+  bright profiles create -h zosmfbri
+
+# List all my Datasets. The main ones follow
+# ==> LAPJO01.PUBLIC.COBOL
+# ==> LAPJO01.PUBLIC.JCL
+  bright files list ds "lapjo01.*"
+
+# List all the members of A datset
+  bright files list am "lapjo01.public.jcl"
+
+# Download a dataset member to a file. 
+  bright files download ds "lapjo01.public.cobol(hello)" -f hello.txt
+
+# Download dataset member(s) to a folder
+  bright files download am "lapjo01.public.cobol" -d cobol-temp/
+
+# edited / modified the cobol file on my desktop
+
+# Upload my modified Cobol file to a Dataset
+ bright files upload ftds "cobol/hello.txt" "lapjo01.public.cobol(hello)"
+ bright files upload ftds -h ==> give you some help on 
+
+# Compile my cobol program by submitting the cobol.txt JCL 
+# ==> Included in the shell script as step 01
+# ==> Returns a JOB ID. I can use that to get job details, status etc. 
+  bright jobs submit ds "lapjo01.public.jcl(cobol)"
+  bright jobs submit ds "lapjo01.public.jcl(cobol)" --rff jobid --rft string
+
+# Check status of the cobol compile. The jobid comes from the job I ran.
+# # job-status-by-jobid | jsbj  View status details of a z/OS job 
+# Included in the shell script as step 02
+# ==> The shell srcript substitutes the job id into the command. 
+  bright jobs view job-status-by-jobid JOB39206 --rff retcode --rft string
+
+# Run my cobol program by submitting the cblrun.txt JCL  
+# Included in the shell script as step 03
+  bright jobs submit ds "lapjo01.public.jcl(cblrun)"
+
+# Check status of cobol run
+  bright jobs view jsbj JOB12441  ==> job status by job id
+
+# List the spool file(s) (DDs) for a z/OS job on the JES/spool queues
+# This amounts to a list of a series of files related to the output and status for a job 
+# job-status-by-jobid | jsbj  View status details of a z/OS job
+  bright jobs list sfbj JOB12441
+    2   JESMSGLG   JES2  
+    3   JESJCL     JES2  
+    4   JESYSMSG   JES2  
+    103 SYSOUT     STEP10
+
+# View the output of the cobol program. 
+# For example:  Hello, Lisle Technical Conference!
+# This amounts to viewing the SYSOUT spool file. 
+# spool-file-by-id    | sfbi    View a spool file from a z/OS job
+  bright jobs view sfbi JOB12441 103 ==> spool file by id
+  
+# Run Shell Script that Compiles and Runs the cobol program. 
+  bash runHello
