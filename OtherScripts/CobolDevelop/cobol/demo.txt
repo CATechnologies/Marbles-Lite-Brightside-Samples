@@ -1,6 +1,0 @@
-       IDENTIFICATION DIVISION.                                         00020000
-       PROGRAM-ID.  Shortest.                                           00030000
-       PROCEDURE DIVISION.                                              00040000
-       DisplayPrompt.                                                   00050000
-           DISPLAY "get this on my pc".                                 00060022
-           STOP RUN.                                                    00070000
